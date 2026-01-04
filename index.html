@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SunSetWar</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #ed7646; font-family: 'Segoe UI', sans-serif; user-select: none; touch-action: none; }
+        
+        /* YÜKLEME & GİRİŞ */
+        #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #2c3e50; color: white; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        #login-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; }
+        
+        /* BAŞLIK */
+        h1 {
+            font-size: 50px;
+            color: #f1c40f;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            text-shadow: 4px 4px 0 #c0392b;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        /* ÖLÜM EKRANI */
+        #death-screen { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(50, 0, 0, 0.9); display: none; 
+            flex-direction: column; align-items: center; justify-content: center; 
+            z-index: 200; color: #e74c3c;
+        }
+        #death-screen h1 { font-size: 80px; margin: 0; text-shadow: 0 0 20px black; color: #c0392b; }
+        #death-screen p { color: white; font-size: 20px; margin-bottom: 30px; }
+
+        input { padding: 15px; font-size: 18px; text-align: center; margin-bottom: 20px; width: 60%; max-width: 300px; border: 2px solid #e67e22; background: #222; color: white; border-radius: 8px; outline: none; }
+        
+        .btn-group { display: flex; gap: 10px; width: 60%; max-width: 300px; justify-content: center; }
+        button { padding: 15px 30px; font-size: 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; text-transform: uppercase; }
+        
+        #btn-join { background: #d35400; width: 100%; } 
+        #btn-join:hover { background: #e67e22; }
+        
+        #btn-respawn { background: #e67e22; box-shadow: 0 0 20px #e67e22; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+        /* HUD */
+        #hud { position: absolute; top: 10px; left: 10px; color: white; background: rgba(0,0,0,0.5); padding: 8px; border-radius: 8px; display: none; pointer-events: none; font-size: 12px; font-weight: bold; border: 1px solid #ed7646; z-index: 50; }
+        .hud-row { display: flex; justify-content: space-between; margin-bottom: 2px; gap: 10px; }
+        
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; background: #00ff00; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; display: none; box-shadow: 0 0 5px #00ff00;}
+        #reload-msg { position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%); color: #e74c3c; font-size: 24px; font-weight: 900; text-shadow: 2px 2px 0 black; display: none; pointer-events: none; z-index: 20; }
+        #ammo-box { position: absolute; top: 10px; right: 10px; font-size: 24px; font-weight: bold; color: #f1c40f; text-shadow: 1px 1px 0 #000; display: none; pointer-events: none; }
+
+        /* MOBİL KONTROLLER */
+        #zone-left { position: absolute; bottom: 20px; left: 20px; width: 150px; height: 150px; z-index: 20; display: none; }
+        #zone-right { position: absolute; bottom: 20px; right: 20px; width: 150px; height: 150px; z-index: 20; display: none; }
+        #fire-btn { position: absolute; bottom: 120px; right: 140px; width: 70px; height: 70px; background: rgba(255, 50, 50, 0.6); border: 3px solid rgba(255, 255, 255, 0.7); border-radius: 50%; z-index: 30; display: none; align-items: center; justify-content: center; font-weight: bold; color: white; font-size: 14px; user-select: none; }
+        #fire-btn:active { background: rgba(255, 0, 0, 0.9); transform: scale(0.9); }
+
+        .enemy-container { position: absolute; pointer-events: none; display: flex; flex-direction: column; align-items: center; width: 100px; transform: translateY(-100%); padding-bottom: 15px; }
+        .enemy-name { color: white; font-weight: bold; font-size: 12px; text-shadow: 1px 1px 0 #000; margin-bottom: 2px; }
+        .health-bar-bg { width: 80%; height: 8px; background: #333; border: 1px solid #000; border-radius: 3px; position: relative; overflow: hidden; }
+        .health-bar-fill { height: 100%; background: #2ecc71; transition: width 0.2s; }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+</head>
+<body>
+
+    <div id="loading-screen">
+        <h2>YÜKLENİYOR...</h2>
+    </div>
+
+    <div id="login-screen">
+        <h1>SunSetWar</h1>
+        <input type="text" id="username" placeholder="Savaşçı Adı" autocomplete="off" maxlength="10">
+        
+        <div class="btn-group">
+            <button id="btn-join">SAVAŞA KATIL</button>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <button onclick="resetGame()" style="background:#c0392b; font-size:12px; padding:10px; width:auto;">⚠️ SUNUCUYU SIFIRLA</button>
+        </div>
+    </div>
+
+    <div id="death-screen">
+        <h1>ÖLDÜN</h1>
+        <p>Savaş henüz bitmedi...</p>
+        <button id="btn-respawn">YENİDEN DOĞ</button>
+    </div>
+
+    <div id="crosshair"></div>
+    <div id="reload-msg">RELOAD...</div>
+    <div id="ammo-box">8 / 8</div>
+
+    <div id="hud">
+        <div class="hud-row"><span>OYUNCU:</span> <span id="hud-name" style="color:#f1c40f">-</span></div>
+        <div class="hud-row"><span>CAN:</span> <span id="hp-val" style="color:#2ecc71">100</span></div>
+        <div class="hud-row"><span>PING:</span> <span id="ping-val">0 ms</span></div>
+    </div>
+
+    <div id="zone-left"></div>
+    <div id="zone-right"></div>
+    <div id="fire-btn">ATEŞ</div>
+
+    <script>
+        const SB_URL = 'https://lulrbqyqhylromxboysa.supabase.co';
+        const SB_KEY = 'sb_publishable_3onpBuxYiiaTgeEs0TTvlA_QZcrD0Bj';
+        
+        let client, myId = null, myHealth = 100;
+        let myColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+        let myTotalRotation = 0; 
+        
+        let scene, camera, renderer, controls, weapon;
+        let joystickMove = { x: 0, y: 0 };
+        let joystickLook = { x: 0, y: 0 };
+        let moveF = false, moveB = false, moveL = false, moveR = false;
+        let isMobile = false;
+
+        let ammo = 8; const maxAmmo = 8;
+        let isReloading = false; let reloadTimer = null;
+        
+        const velocity = new THREE.Vector3(), direction = new THREE.Vector3(), raycaster = new THREE.Raycaster();
+        let enemies = {};
+        const walls = [];      
+        const mapMeshes = [];  
+
+        // --- HARİTA VERİSİ ---
+        const mapData = [
+            { x: 0, z: -50, w: 100, d: 2, h: 10, color: 0x2c3e50 },
+            { x: 0, z: 50, w: 100, d: 2, h: 10, color: 0x2c3e50 },
+            { x: -50, z: 0, w: 2, d: 100, h: 10, color: 0x2c3e50 },
+            { x: 50, z: 0, w: 2, d: 100, h: 10, color: 0x2c3e50 },
+            { x: 0, z: 0, w: 8, d: 8, h: 6, color: 0x111111 },
+            { x: -15, z: -20, w: 10, d: 2, h: 3, color: 0x5d4037 },
+            { x: 15, z: -20, w: 10, d: 2, h: 3, color: 0x5d4037 },
+            { x: -15, z: 20, w: 10, d: 2, h: 3, color: 0x5d4037 },
+            { x: 15, z: 20, w: 10, d: 2, h: 3, color: 0x5d4037 },
+            { x: -30, z: 0, w: 2, d: 20, h: 4, color: 0x455a64 },
+            { x: 30, z: 0, w: 2, d: 20, h: 4, color: 0x455a64 },
+        ];
+
+        window.onload = async function() {
+            isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            try {
+                if(!window.THREE || !window.supabase) throw new Error("Kütüphaneler yüklenemedi.");
+                client = window.supabase.createClient(SB_URL, SB_KEY);
+                const { error } = await client.from('oyun_haritasi').select('count').limit(1);
+                if(error && error.code !== 'PGRST116') throw error;
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('login-screen').style.display = 'flex';
+            } catch (err) {
+                alert("Hata: " + err.message);
+            }
+        };
+
+        // --- GİRİŞ KONTROLÜ (ÖLÜ İSİM ALMA DAHİL) ---
+        document.getElementById('btn-join').addEventListener('click', async () => {
+            const name = document.getElementById('username').value.trim();
+            if(!name) return alert("İsim giriniz!");
+
+            const { data: existingUser } = await client.from('oyun_haritasi').select('can').eq('id', name).maybeSingle();
+            
+            // Eğer oyuncu var ve yaşıyorsa (can > 0) izin verme
+            if (existingUser && existingUser.can > 0) {
+                alert("⛔ BU İSİM OYUNDA! Başka bir isim seç.");
+                return;
+            }
+            
+            myId = name;
+            document.getElementById('hud-name').innerText = myId;
+            myTotalRotation = 0;
+            
+            // İsmi al ve oyuna başla
+            await client.from('oyun_haritasi').upsert({ id: myId, x: 0, z: 40, ry: 0, renk: myColor, can: 100 });
+            initGame();
+        });
+
+        // --- RESPAWN (YENİDEN DOĞ) ---
+        document.getElementById('btn-respawn').addEventListener('click', async () => {
+            myHealth = 100;
+            ammo = maxAmmo;
+            isReloading = false;
+            
+            document.getElementById('hp-val').innerText = 100;
+            document.getElementById('ammo-box').innerText = `${ammo} / ${maxAmmo}`;
+            document.getElementById('death-screen').style.display = 'none';
+            document.getElementById('crosshair').style.display = 'block';
+            document.getElementById('hud').style.display = 'block';
+            
+            if(isMobile) {
+                document.getElementById('zone-left').style.display = 'block';
+                document.getElementById('zone-right').style.display = 'block';
+                document.getElementById('fire-btn').style.display = 'flex';
+            }
+
+            const spawnX = (Math.random() - 0.5) * 40;
+            const spawnZ = (Math.random() - 0.5) * 40;
+            
+            controls.getObject().position.set(spawnX, 1.7, spawnZ);
+            await client.from('oyun_haritasi').update({ can: 100, x: spawnX, z: spawnZ }).eq('id', myId);
+            if(!isMobile) controls.lock();
+        });
+
+        async function resetGame() {
+            if(confirm("⚠️ TÜM OYUNCULARI ATMAK İSTEDİĞİNE EMİN MİSİN?")) {
+                await client.from('oyun_haritasi').delete().neq('id', 'placeholder');
+                alert("Sunucu temizlendi!");
+            }
+        }
+
+        function initGame() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('hud').style.display = 'block';
+            document.getElementById('crosshair').style.display = 'block';
+            document.getElementById('ammo-box').style.display = 'block';
+
+            if (isMobile) {
+                document.getElementById('zone-left').style.display = 'block';
+                document.getElementById('zone-right').style.display = 'block';
+                document.getElementById('fire-btn').style.display = 'flex';
+                setupMobileControls();
+            }
+
+            scene = new THREE.Scene();
+            const sunsetColor = 0xed7646; 
+            scene.background = new THREE.Color(sunsetColor); 
+            scene.fog = new THREE.Fog(sunsetColor, 20, 90);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.7, 40);
+
+            controls = new THREE.PointerLockControls(camera, document.body);
+            if (!isMobile) {
+                document.body.addEventListener('click', () => { if(!controls.isLocked && myHealth > 0) controls.lock(); });
+                controls.lock();
+            }
+            scene.add(controls.getObject());
+
+            const wGeo = new THREE.BoxGeometry(0.15, 0.15, 0.8);
+            const wMat = new THREE.MeshStandardMaterial({ color: 0x111 });
+            weapon = new THREE.Mesh(wGeo, wMat);
+            weapon.position.set(0.3, -0.3, -0.5);
+            camera.add(weapon);
+
+            scene.add(new THREE.AmbientLight(0xffccaa, 0.4));
+            const dirLight = new THREE.DirectionalLight(0xffaa00, 1);
+            dirLight.position.set(-50, 30, -50);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 4096; dirLight.shadow.mapSize.height = 4096;
+            scene.add(dirLight);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            const floorGeo = new THREE.PlaneGeometry(300, 300);
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x5d4037 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            createMap();
+
+            if (!isMobile) {
+                document.addEventListener( 'mousemove', ( event ) => {
+                    if ( controls.isLocked === false ) return;
+                    myTotalRotation -= event.movementX * 0.002; 
+                });
+                document.addEventListener('keydown', (e) => onKey(e, true));
+                document.addEventListener('keyup', (e) => onKey(e, false));
+                document.addEventListener('mousedown', shoot);
+            }
+
+            loadPlayers();
+            startNetwork();
+            animate();
+        }
+
+        function setupMobileControls() {
+            const joyLeft = nipplejs.create({ zone: document.getElementById('zone-left'), mode: 'static', position: { left: '50%', top: '50%' }, color: 'white', size: 100 });
+            joyLeft.on('move', (evt, data) => { if (data.vector) { joystickMove.x = data.vector.x; joystickMove.y = data.vector.y; } });
+            joyLeft.on('end', () => { joystickMove.x = 0; joystickMove.y = 0; });
+
+            const joyRight = nipplejs.create({ zone: document.getElementById('zone-right'), mode: 'static', position: { left: '50%', top: '50%' }, color: 'white', size: 100 });
+            joyRight.on('move', (evt, data) => { if (data.vector) { joystickLook.x = data.vector.x; } });
+            joyRight.on('end', () => { joystickLook.x = 0; });
+
+            const fireBtn = document.getElementById('fire-btn');
+            fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); shoot(); });
+        }
+
+        function createMap() {
+            mapData.forEach(obj => {
+                const geo = new THREE.BoxGeometry(obj.w, obj.h, obj.d);
+                const mat = new THREE.MeshStandardMaterial({ color: obj.color });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(obj.x, obj.h / 2, obj.z);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                walls.push({ minX: obj.x - obj.w / 2, maxX: obj.x + obj.w / 2, minZ: obj.z - obj.d / 2, maxZ: obj.z + obj.d / 2 });
+                mapMeshes.push(mesh);
+            });
+        }
+
+        function checkCollision(x, z) {
+            const pad = 0.5;
+            for (let w of walls) {
+                if (x > w.minX - pad && x < w.maxX + pad && z > w.minZ - pad && z < w.maxZ + pad) return true;
+            }
+            return false;
+        }
+
+        function updateEnemy(data) {
+            if(data.can <= 0) {
+                if(enemies[data.id]) {
+                    scene.remove(enemies[data.id].mesh);
+                    enemies[data.id].labelContainer.remove();
+                    delete enemies[data.id];
+                }
+                return;
+            }
+            if(!enemies[data.id]) {
+                const group = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.8, 0.8), new THREE.MeshStandardMaterial({ color: data.renk }));
+                body.position.y = 0.9; body.castShadow = true; group.add(body);
+                const visor = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.15), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+                visor.position.set(0, 1.5, -0.42); group.add(visor);
+                scene.add(group);
+
+                const container = document.createElement('div');
+                container.className = 'enemy-container';
+                container.innerHTML = `<div class="enemy-name">${data.id}</div><div class="health-bar-bg"><div class="health-bar-fill" style="width: 100%;"></div></div>`;
+                document.body.appendChild(container);
+
+                enemies[data.id] = { mesh: group, labelContainer: container, barFill: container.querySelector('.health-bar-fill'), targetPos: new THREE.Vector3(data.x, 0, data.z), targetRot: data.ry, lastShotId: data.ates_id };
+                group.position.set(data.x, 0, data.z);
+            }
+
+            const en = enemies[data.id];
+            en.targetPos.set(data.x, 0, data.z);
+            en.targetRot = data.ry;
+            
+            if(data.ates_id !== en.lastShotId) {
+                en.lastShotId = data.ates_id;
+                const startPos = en.mesh.position.clone(); startPos.y += 1.4; 
+                const dirX = -Math.sin(data.ry); const dirZ = -Math.cos(data.ry);
+                const endPos = new THREE.Vector3(startPos.x + (dirX * 100), startPos.y, startPos.z + (dirZ * 100));
+                
+                // Mermi hesaplama (Raycast)
+                const ray = new THREE.Raycaster(startPos, new THREE.Vector3(dirX, 0, dirZ).normalize());
+                let allTargets = [...mapMeshes]; 
+                const hits = ray.intersectObjects(allTargets);
+                let visualEndPos = endPos;
+                if(hits.length > 0 && hits[0].distance < 100) { visualEndPos = hits[0].point; }
+                
+                drawBulletTrail(startPos, visualEndPos);
+            }
+            en.barFill.style.width = data.can + '%';
+            en.barFill.style.background = data.can > 50 ? '#2ecc71' : (data.can > 20 ? '#f1c40f' : '#e74c3c');
+        }
+
+        function drawBulletTrail(start, end) {
+            const distance = start.distanceTo(end);
+            const cylinderGeo = new THREE.CylinderGeometry(0.04, 0.04, distance, 6);
+            cylinderGeo.rotateX(-Math.PI / 2);
+            const cylinderMat = new THREE.MeshBasicMaterial({ color: 0xffff00 }); 
+            const bullet = new THREE.Mesh(cylinderGeo, cylinderMat);
+            const mid = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+            bullet.position.copy(mid);
+            bullet.lookAt(end);
+            scene.add(bullet);
+            setTimeout(() => scene.remove(bullet), 100);
+        }
+
+        async function loadPlayers() {
+            const { data } = await client.from('oyun_haritasi').select('*');
+            if(data) data.forEach(p => { if(p.id !== myId) updateEnemy(p); });
+        }
+
+        function startNetwork() {
+            client.channel('public:oyun_haritasi').on('postgres_changes', { event: '*', schema: 'public', table: 'oyun_haritasi' }, payload => {
+                
+                if (payload.eventType === 'DELETE') {
+                    if (payload.old.id === myId) {
+                        alert("OYUN SIFIRLANDI!");
+                        location.reload();
+                    } else {
+                        if(enemies[payload.old.id]) {
+                            scene.remove(enemies[payload.old.id].mesh);
+                            enemies[payload.old.id].labelContainer.remove();
+                            delete enemies[payload.old.id];
+                        }
+                    }
+                    return;
+                }
+
+                const d = payload.new;
+                if(d.id === myId) {
+                    if(d.can !== myHealth) {
+                        myHealth = d.can;
+                        document.getElementById('hp-val').innerText = myHealth;
+                        if(myHealth <= 0) {
+                            if(!isMobile) document.exitPointerLock(); 
+                            document.getElementById('death-screen').style.display = 'flex'; 
+                            document.getElementById('crosshair').style.display = 'none';
+                            document.getElementById('hud').style.display = 'none';
+                            document.getElementById('zone-left').style.display = 'none';
+                            document.getElementById('zone-right').style.display = 'none';
+                            document.getElementById('fire-btn').style.display = 'none';
+                        }
+                    }
+                } else { updateEnemy(d); }
+            }).subscribe();
+
+            setInterval(async () => {
+                if((isMobile || controls.isLocked) && myHealth > 0) {
+                    const startPing = performance.now();
+                    await client.from('oyun_haritasi').update({
+                        x: parseFloat(controls.getObject().position.x.toFixed(2)),
+                        z: parseFloat(controls.getObject().position.z.toFixed(2)),
+                        ry: parseFloat(myTotalRotation.toFixed(2))
+                    }).eq('id', myId);
+                    const endPing = performance.now();
+                    document.getElementById('ping-val').innerText = Math.round(endPing - startPing) + " ms";
+                }
+            }, 100);
+        }
+
+        function onKey(e, s) { if(e.code === 'KeyW') moveF = s; if(e.code === 'KeyS') moveB = s; if(e.code === 'KeyA') moveL = s; if(e.code === 'KeyD') moveR = s; }
+
+        function startReload() {
+            if(isReloading) return;
+            isReloading = true;
+            const msgEl = document.getElementById('reload-msg');
+            msgEl.style.display = 'block';
+            let timeLeft = 6;
+            msgEl.innerText = `RELOAD... (${timeLeft})`;
+            reloadTimer = setInterval(() => {
+                timeLeft--;
+                msgEl.innerText = `RELOAD... (${timeLeft})`;
+                if(timeLeft <= 0) {
+                    clearInterval(reloadTimer);
+                    isReloading = false;
+                    ammo = maxAmmo;
+                    document.getElementById('reload-msg').style.display = 'none';
+                    document.getElementById('ammo-box').innerText = `${ammo} / ${maxAmmo}`;
+                    weapon.rotation.z = 0; 
+                }
+            }, 1000);
+        }
+
+        async function shoot() {
+            if(isReloading) return;
+            if(ammo <= 0) { startReload(); return; }
+
+            ammo--;
+            document.getElementById('ammo-box').innerText = `${ammo} / ${maxAmmo}`;
+
+            weapon.position.z += 0.2; setTimeout(() => weapon.position.z -= 0.2, 50);
+            
+            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+            
+            let targets = [...mapMeshes]; 
+            for(let k in enemies) targets.push(enemies[k].mesh.children[0]);
+            
+            const hits = raycaster.intersectObjects(targets);
+            
+            const startPoint = new THREE.Vector3().copy(camera.position);
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+            startPoint.add(dir.clone().multiplyScalar(0.5)); startPoint.y -= 0.2; startPoint.x += 0.2;
+            
+            let endPoint;
+            let hitEnemyId = null;
+
+            if (hits.length > 0) {
+                const firstHit = hits[0];
+                endPoint = firstHit.point;
+                // Düşmanı bul
+                hitEnemyId = Object.keys(enemies).find(k => enemies[k].mesh.children[0] === firstHit.object);
+            } else {
+                endPoint = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(100));
+            }
+            
+            drawBulletTrail(startPoint, endPoint);
+
+            await client.from('oyun_haritasi').update({ ates_id: Math.random() }).eq('id', myId);
+
+            if(hitEnemyId) {
+                const hitObj = hits[0].object;
+                const oldC = hitObj.material.color.getHex();
+                hitObj.material.color.setHex(0xffffff);
+                setTimeout(() => hitObj.material.color.setHex(oldC), 80);
+                
+                const { data } = await client.from('oyun_haritasi').select('can').eq('id', hitEnemyId).single();
+                if(data) await client.from('oyun_haritasi').update({ can: data.can - 10 }).eq('id', hitEnemyId);
+            }
+            if(ammo === 0) startReload();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (isReloading) { weapon.rotation.z += 0.1; }
+
+            if(isMobile || controls.isLocked) {
+                const delta = 0.015; 
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                let inputX = 0; let inputZ = 0;
+                if (isMobile) {
+                    inputX = joystickMove.x; 
+                    inputZ = joystickMove.y;
+                    if (joystickLook.x !== 0) {
+                        myTotalRotation -= joystickLook.x * 0.04;
+                        controls.getObject().rotation.y = myTotalRotation;
+                    }
+                } else {
+                    inputX = Number(moveR) - Number(moveL);
+                    inputZ = Number(moveF) - Number(moveB);
+                }
+
+                direction.z = inputZ; direction.x = inputX; direction.normalize();
+
+                if (inputZ !== 0 || inputX !== 0) {
+                    velocity.z -= direction.z * 80.0 * delta;
+                    velocity.x -= direction.x * 80.0 * delta;
+                }
+
+                const moveX = -velocity.x * delta;
+                const moveZ = -velocity.z * delta;
+
+                controls.moveRight(moveX);
+                if (checkCollision(controls.getObject().position.x, controls.getObject().position.z)) {
+                    controls.moveRight(-moveX); velocity.x = 0;
+                }
+                controls.moveForward(moveZ);
+                if (checkCollision(controls.getObject().position.x, controls.getObject().position.z)) {
+                    controls.moveForward(-moveZ); velocity.z = 0;
+                }
+            }
+
+            for(let id in enemies) {
+                const en = enemies[id];
+                if(en.targetPos) en.mesh.position.lerp(en.targetPos, 0.1);
+                if(en.targetRot !== undefined) en.mesh.rotation.y += (en.targetRot - en.mesh.rotation.y) * 0.1;
+                
+                const pos = en.mesh.position.clone();
+                pos.y += 2.8; pos.project(camera);
+                
+                if(pos.z < 1) {
+                    en.labelContainer.style.display = 'flex';
+                    en.labelContainer.style.left = `${(pos.x * .5 + .5) * window.innerWidth - 50}px`; 
+                    en.labelContainer.style.top = `${-(pos.y * .5 - .5) * window.innerHeight}px`;
+                } else { en.labelContainer.style.display = 'none'; }
+            }
+            renderer.render(scene, camera);
+        }
+        window.addEventListener('resize', () => { if(camera) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); } });
+    </script>
+</body>
+</html>
