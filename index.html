@@ -12,23 +12,10 @@
         #login-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: white; }
         
         /* BAŞLIK */
-        h1 {
-            font-size: 50px;
-            color: #f1c40f;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            text-shadow: 4px 4px 0 #c0392b;
-            margin-bottom: 20px;
-            font-style: italic;
-        }
+        h1 { font-size: 50px; color: #f1c40f; text-transform: uppercase; letter-spacing: 3px; text-shadow: 4px 4px 0 #c0392b; margin-bottom: 20px; font-style: italic; }
 
         /* ÖLÜM EKRANI */
-        #death-screen { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(50, 0, 0, 0.9); display: none; 
-            flex-direction: column; align-items: center; justify-content: center; 
-            z-index: 200; color: #e74c3c;
-        }
+        #death-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(50, 0, 0, 0.9); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 200; color: #e74c3c; }
         #death-screen h1 { font-size: 80px; margin: 0; text-shadow: 0 0 20px black; color: #c0392b; }
         #death-screen p { color: white; font-size: 20px; margin-bottom: 30px; }
 
@@ -77,11 +64,9 @@
     <div id="login-screen">
         <h1>SunSetWar</h1>
         <input type="text" id="username" placeholder="Savaşçı Adı" autocomplete="off" maxlength="10">
-        
         <div class="btn-group">
             <button id="btn-join">SAVAŞA KATIL</button>
         </div>
-        
         <div style="margin-top: 20px;">
             <button onclick="resetGame()" style="background:#c0392b; font-size:12px; padding:10px; width:auto;">⚠️ SUNUCUYU SIFIRLA</button>
         </div>
@@ -129,7 +114,34 @@
         const walls = [];      
         const mapMeshes = [];  
 
-        // --- HARİTA VERİSİ ---
+        // --- SES MOTORU (Web Audio API) ---
+        // Harici dosya kullanmaz, tarayıcının kendi sesi ile çalışır.
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playShootSound() {
+            // Tarayıcı politikası gereği tıklama ile context açılır
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+
+            // Lazerimsi tok bir ses
+            osc.type = 'sawtooth'; 
+            osc.frequency.setValueAtTime(600, audioCtx.currentTime); // Başlangıç frekansı
+            osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.15); // Hızlı düşüş
+
+            // Ses seviyesi (Abartısız)
+            gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime); 
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.15);
+        }
+
+        // --- HARİTA ---
         const mapData = [
             { x: 0, z: -50, w: 100, d: 2, h: 10, color: 0x2c3e50 },
             { x: 0, z: 50, w: 100, d: 2, h: 10, color: 0x2c3e50 },
@@ -158,14 +170,13 @@
             }
         };
 
-        // --- GİRİŞ KONTROLÜ (ÖLÜ İSİM ALMA DAHİL) ---
+        // --- GİRİŞ & İSİM KONTROLÜ ---
         document.getElementById('btn-join').addEventListener('click', async () => {
             const name = document.getElementById('username').value.trim();
             if(!name) return alert("İsim giriniz!");
 
             const { data: existingUser } = await client.from('oyun_haritasi').select('can').eq('id', name).maybeSingle();
             
-            // Eğer oyuncu var ve yaşıyorsa (can > 0) izin verme
             if (existingUser && existingUser.can > 0) {
                 alert("⛔ BU İSİM OYUNDA! Başka bir isim seç.");
                 return;
@@ -175,12 +186,10 @@
             document.getElementById('hud-name').innerText = myId;
             myTotalRotation = 0;
             
-            // İsmi al ve oyuna başla
             await client.from('oyun_haritasi').upsert({ id: myId, x: 0, z: 40, ry: 0, renk: myColor, can: 100 });
             initGame();
         });
 
-        // --- RESPAWN (YENİDEN DOĞ) ---
         document.getElementById('btn-respawn').addEventListener('click', async () => {
             myHealth = 100;
             ammo = maxAmmo;
@@ -209,7 +218,7 @@
         async function resetGame() {
             if(confirm("⚠️ TÜM OYUNCULARI ATMAK İSTEDİĞİNE EMİN MİSİN?")) {
                 await client.from('oyun_haritasi').delete().neq('id', 'placeholder');
-                alert("Sunucu temizlendi!");
+                alert("Sunucu sıfırlandı!");
             }
         }
 
@@ -349,13 +358,17 @@
             en.targetPos.set(data.x, 0, data.z);
             en.targetRot = data.ry;
             
+            // Diğer oyuncu ateş etti mi?
             if(data.ates_id !== en.lastShotId) {
                 en.lastShotId = data.ates_id;
+                
+                // SES ÇAL (BAŞKASI SIKINCA)
+                playShootSound();
+
                 const startPos = en.mesh.position.clone(); startPos.y += 1.4; 
                 const dirX = -Math.sin(data.ry); const dirZ = -Math.cos(data.ry);
                 const endPos = new THREE.Vector3(startPos.x + (dirX * 100), startPos.y, startPos.z + (dirZ * 100));
                 
-                // Mermi hesaplama (Raycast)
                 const ray = new THREE.Raycaster(startPos, new THREE.Vector3(dirX, 0, dirZ).normalize());
                 let allTargets = [...mapMeshes]; 
                 const hits = ray.intersectObjects(allTargets);
@@ -465,6 +478,9 @@
             ammo--;
             document.getElementById('ammo-box').innerText = `${ammo} / ${maxAmmo}`;
 
+            // SES ÇAL (BEN SIKINCA)
+            playShootSound();
+
             weapon.position.z += 0.2; setTimeout(() => weapon.position.z -= 0.2, 50);
             
             raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
@@ -484,7 +500,6 @@
             if (hits.length > 0) {
                 const firstHit = hits[0];
                 endPoint = firstHit.point;
-                // Düşmanı bul
                 hitEnemyId = Object.keys(enemies).find(k => enemies[k].mesh.children[0] === firstHit.object);
             } else {
                 endPoint = new THREE.Vector3().copy(camera.position).add(dir.multiplyScalar(100));
